@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"text/template"
@@ -19,15 +18,17 @@ import (
 )
 
 func getPlaylist(u string) error {
+	// парсим url
 	url, err := url.Parse(u)
 	if err != nil {
 		return err
 	}
 
+	// берём только путь до файлов
 	url.Path = filepath.Dir(url.Path)
-
 	base := url.String() + "/"
 
+	// качаем m3u8
 	resp, err := http.Get(u)
 	if err != nil {
 		return err
@@ -36,38 +37,21 @@ func getPlaylist(u string) error {
 	body := resp.Body
 	defer body.Close()
 
+	// создаём пустой список для сегментов
 	lines := make([]string, 0)
 
+	// читаем файл
 	s := bufio.NewScanner(body)
 	for s.Scan() {
 		t := s.Text()
+		// если не комментарий, то добавляем, прибавив url
 		if !strings.HasPrefix(t, "#") {
 			lines = append(lines, base+t)
 		}
 	}
 
-	var wg sync.WaitGroup
-
-	// канал для создания ограничение на одовременно запускаемые рутины
-	ch := make(chan int, 30)
-
-	// прогрессбар на скачивание
-	pb := progressbar.New(len(lines))
-	pb.Describe("Скачивание сегментов")
-	pb.RenderBlank()
-
-	// запускаем рутину на каждый сегмент
-	for i := 0; i < len(lines); i++ {
-		wg.Add(1)
-		// пишем в буферизованный канал для ограничения одновременно запускаемых рутин
-		ch <- i
-		// запуск скачивания
-		go downloadSegment(lines[i], i, ch, &wg, pb)
-	}
-
-	// ожидаем, пока все закачки закончатся
-	wg.Wait()
-	pb.Finish()
+	// запускаем скачивание
+	download(lines)
 
 	return nil
 }
@@ -77,28 +61,39 @@ func getSegments(s string, n int) {
 	t := template.New("")
 	t.Parse(s)
 
+	// создаём пустой список
+	lines := make([]string, 0)
+
+	// заполняем его из темплейта
+	for i := 1; i <= n; i++ {
+		var b bytes.Buffer
+		t.Execute(&b, i)
+		lines = append(lines, b.String())
+	}
+
+	// запускаем закачку
+	download(lines)
+}
+
+func download(l []string) {
+	// основная функция загрузчика
 	var wg sync.WaitGroup
 
 	// канал для создания ограничение на одовременно запускаемые рутины
 	ch := make(chan int, 30)
 
 	// прогрессбар на скачивание
-	pb := progressbar.New(n)
+	pb := progressbar.New(len(l))
 	pb.Describe("Скачивание сегментов")
 	pb.RenderBlank()
 
 	// запускаем рутину на каждый сегмент
-	for i := 1; i <= n; i++ {
-		// буфер для создания строки
-		var b bytes.Buffer
-		// создаём новый url из темплейта
-		t.Execute(&b, i)
-
+	for i := 0; i < len(l); i++ {
 		wg.Add(1)
 		// пишем в буферизованный канал для ограничения одновременно запускаемых рутин
 		ch <- i
 		// запуск скачивания
-		go downloadSegment(b.String(), i, ch, &wg, pb)
+		go downloadSegment(l[i], ch, &wg, pb)
 	}
 
 	// ожидаем, пока все закачки закончатся
@@ -106,7 +101,8 @@ func getSegments(s string, n int) {
 	pb.Finish()
 }
 
-func downloadSegment(u string, i int, ch chan int, wg *sync.WaitGroup, pb *progressbar.ProgressBar) {
+func downloadSegment(u string, ch chan int, wg *sync.WaitGroup, pb *progressbar.ProgressBar) {
+	// функция загрузки одного сегмента
 	// отложенные вызовы wg
 	defer wg.Done()
 	// и функция чтения из буферизованного канала, что бы по окончании сказчивния освободить очередь
@@ -129,7 +125,7 @@ func downloadSegment(u string, i int, ch chan int, wg *sync.WaitGroup, pb *progr
 	rand.Seed(time.Now().UnixNano())
 
 	// имя выходного файла
-	fn := strconv.Itoa(i) + ".ts"
+	fn := filepath.Base(u)
 
 	// цикл в сто повторов
 	for c < 100 {
@@ -168,7 +164,7 @@ func downloadSegment(u string, i int, ch chan int, wg *sync.WaitGroup, pb *progr
 	}
 
 	// создаём файл для записи
-	f, err := os.OpenFile(fn, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	f, err := os.Create(fn)
 	if err != nil {
 		log.Printf("%v, файл: %v\n", err, fn)
 	}

@@ -20,7 +20,7 @@ func concatTs() error {
 	}
 
 	// создаём общий файл
-	fo, err := os.OpenFile("f.mp4", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	fo, err := os.Create("f.mp4")
 	if err != nil {
 		log.Fatal(err)
 	}
