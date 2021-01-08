@@ -7,13 +7,13 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"bitbucket.org/zombiezen/cardcpx/natsort"
-	"github.com/schollz/progressbar"
+	"github.com/facette/natsort"
+	"github.com/schollz/progressbar/v3"
 )
 
 func concatTs() error {
 	fList, err := filepath.Glob("*.ts")
-	natsort.Strings(fList)
+	natsort.Sort(fList)
 
 	if err != nil {
 		return err

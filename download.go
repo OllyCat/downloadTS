@@ -14,7 +14,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/schollz/progressbar"
+	"github.com/schollz/progressbar/v3"
 )
 
 func getPlaylist(u string) error {
