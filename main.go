@@ -6,6 +6,8 @@ import (
 	"log"
 	"os"
 	"strings"
+
+	"github.com/spf13/pflag"
 )
 
 func main() {
@@ -14,18 +16,19 @@ func main() {
 	var u, s string
 
 	// флаги запуска
-	flag.IntVar(&n, "n", 0, "количество сегментов")
-	flag.BoolVar(&con, "c", false, "только объединение сегментов")
-	flag.StringVar(&u, "url", "", "url плейлиста m3u8")
-	flag.StringVar(&s, "seg", "", "url-темплейт, на месте числа надо поставить {{.}}")
+	pflag.IntVarP(&n, "number", "n", 1, "количество сегментов")
+	pflag.BoolVarP(&con, "concat-only", "c", false, "только объединение сегментов")
+	pflag.StringVarP(&u, "url", "u", "", "url плейлиста m3u8")
+	pflag.StringVarP(&s, "seg-template", "s", "", "url-темплейт, на месте числа надо поставить {{.}}")
 
 	// парсим флаги
-	flag.Parse()
+	pflag.Parse()
 
 	if !con {
+		log.Printf("%#v\n\n", s)
 		switch {
-		case !strings.HasPrefix(s, "http") && !strings.HasPrefix(u, "http"):
-			fmt.Println("Invalod URL")
+		case !strings.HasPrefix(s, "http"): //&& !strings.HasPrefix(u, "http"):
+			fmt.Println("Invalid URL")
 			flag.Usage()
 			os.Exit(1)
 		case s != "" && n != 0:
@@ -37,7 +40,7 @@ func main() {
 				os.Exit(1)
 			}
 		default:
-			flag.Usage()
+			pflag.Usage()
 			os.Exit(1)
 		}
 	}
